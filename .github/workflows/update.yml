@@ -1,0 +1,40 @@
+name: Update v2ray subscription
+
+on:
+  schedule:
+    - cron: "0,30 * * * *"   # هر ۳۰ دقیقه (گیت‌هاب گاهی با تأخیر اجرا می‌کند)
+  workflow_dispatch:           # اجرای دستی از تب Actions
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install requests
+
+      - name: Run aggregator
+        run: python aggregator.py
+
+      - name: Commit & push
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add sub.txt configs.txt
+          git commit -m "update subscription $(date -u +'%Y-%m-%d %H:%M UTC')" || echo "no changes"
+          git push
+
+      - name: Purge jsDelivr cache (so the mirror serves fresh configs)
+        run: |
+          curl -s "https://purge.jsdelivr.net/gh/${{ github.repository }}@main/sub.txt" || true
+          curl -s "https://purge.jsdelivr.net/gh/${{ github.repository }}@main/configs.txt" || true
