@@ -11,10 +11,14 @@ v2ray config aggregator
   - باقی‌مانده تا ۱۵۰: به‌طور مساوی بین کانال دوم و سوم
 """
 import base64
+import json
 import re
 import sys
 import time
+from datetime import datetime
 from html import unescape
+from urllib.parse import quote, unquote
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -96,6 +100,31 @@ def select_configs(pools, total=TOTAL, ch1_target=CH1_TARGET):
     return chosen, (len(sel1), len(sel2), len(sel3))
 
 
+def _b64pad(s):
+    return s + "=" * (-len(s) % 4)
+
+
+def add_time_prefix(cfg, prefix):
+    """افزودن زمانِ آپدیت به ابتدای اسمِ نمایشیِ (remark) هر کانفیگ."""
+    try:
+        scheme = cfg.split("://", 1)[0].lower()
+        if scheme == "vmess":
+            raw = base64.b64decode(_b64pad(cfg[8:])).decode("utf-8", "ignore")
+            j = json.loads(raw)
+            j["ps"] = prefix + str(j.get("ps", ""))
+            new = base64.b64encode(
+                json.dumps(j, ensure_ascii=False).encode("utf-8")
+            ).decode()
+            return "vmess://" + new
+        # vless / trojan / ss / ssr / tuic / hysteria(2) → remark در fragment بعد از #
+        if "#" in cfg:
+            base, frag = cfg.split("#", 1)
+            return base + "#" + quote(prefix + unquote(frag))
+        return cfg + "#" + quote(prefix.strip())
+    except Exception:
+        return cfg
+
+
 def main():
     pools = {}
     for i, ch in enumerate(CHANNELS):
@@ -106,6 +135,12 @@ def main():
     final, (n1, n2, n3) = select_configs(pools)
     print(f"Selected {len(final)} configs -> ch1={n1} ch2={n2} ch3={n3}")
 
+    # زمانِ آپدیت — هم برای فایلِ updated.txt و هم برای اسمِ کانفیگ‌ها
+    now_teh = datetime.now(ZoneInfo("Asia/Tehran"))
+    now_utc = datetime.now(ZoneInfo("UTC"))
+    name_prefix = f"🕒{now_teh:%m/%d %H:%M} | "          # کنارِ اسمِ هر سرور
+    final = [add_time_prefix(c, name_prefix) for c in final]
+
     blob = "\n".join(final)
     sub_b64 = base64.b64encode(blob.encode()).decode()
     with open(OUTPUT, "w", encoding="utf-8") as f:
@@ -113,7 +148,19 @@ def main():
     # نسخه‌ی متنی هم برای بازبینی
     with open("configs.txt", "w", encoding="utf-8") as f:
         f.write(blob)
+
+    # فایلِ زمانِ آخرین آپدیت (وقتِ تهران + UTC)
+    stamp = (
+        "=== v2ray subscription — last update ===\n"
+        f"به وقت تهران : {now_teh:%Y-%m-%d %H:%M:%S} (+03:30)\n"
+        f"UTC          : {now_utc:%Y-%m-%d %H:%M:%S}\n"
+        f"تعداد کانفیگ : {len(final)}  (کانال۱={n1} | کانال۲={n2} | کانال۳={n3})\n"
+    )
+    with open("updated.txt", "w", encoding="utf-8") as f:
+        f.write(stamp)
+
     print(f"Wrote {OUTPUT} ({len(sub_b64)} chars)")
+    print(stamp)
 
 
 if __name__ == "__main__":
