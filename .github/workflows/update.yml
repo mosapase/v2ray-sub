@@ -30,7 +30,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add sub.txt configs.txt
+          git add sub.txt configs.txt updated.txt
           git commit -m "update subscription $(date -u +'%Y-%m-%d %H:%M UTC')" || echo "no changes"
           git push
 
@@ -38,3 +38,4 @@ jobs:
         run: |
           curl -s "https://purge.jsdelivr.net/gh/${{ github.repository }}@main/sub.txt" || true
           curl -s "https://purge.jsdelivr.net/gh/${{ github.repository }}@main/configs.txt" || true
+          curl -s "https://purge.jsdelivr.net/gh/${{ github.repository }}@main/updated.txt" || true
